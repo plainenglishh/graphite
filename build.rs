@@ -2,7 +2,8 @@
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+
+use mlua::chunk::Compiler;
 
 fn main() {
     println!("cargo:rerun-if-changed=std");
@@ -23,20 +24,15 @@ fn main() {
             let file_name = path.file_stem().unwrap().to_str().unwrap();
             let module_key = format!("{}", file_name);
 
-            /*let output = Command::new("luau-compile")
-            .arg("--binary")
-            .arg("-O2")
-            .arg("-g1")
-            .arg(&path)
-            .output()
-            .unwrap();*/
+            let bytecode = Compiler::new()
+                .set_optimization_level(2)
+                .set_debug_level(2)
+                .set_coverage_level(0)
+                .set_type_info_level(0)
+                .compile(fs::read(path).unwrap())
+                .unwrap();
 
-            //let bytecode = output.stdout;
-            vfs_code.push_str(&format!(
-                "    (\"{}\", &{:?}),\n",
-                module_key,
-                fs::read(path).unwrap().to_vec()
-            ));
+            vfs_code.push_str(&format!("    (\"{}\", &{:?}),\n", module_key, bytecode));
         }
     }
 

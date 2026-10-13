@@ -82,6 +82,7 @@ fn op_read_file(luau: &Lua, path: LuaString) -> LuaResult<LuaBuffer> {
 
     luau.create_buffer(file_bytes)
 }
+
 pub fn create(luau: &Lua) -> LuaResult<LuaTable> {
     let ops = luau.create_table()?;
 

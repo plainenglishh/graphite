@@ -44,12 +44,9 @@ local loaded = ops.load(src, `@{target_path}`)
 
 local ok, err = xpcall(loaded, function(err)
 	local level = 2
-	local traceback = {}
-	while true do
+	local traceback: { sys.StackTraceElement } = {}
+	while debug.info(level + 2, "s") do -- skip last two frames
 		local source, line, func = debug.info(level, "slf")
-		if not source then
-			break
-		end
 
 		table.insert(traceback, {
 			source = source,
@@ -66,13 +63,40 @@ local ok, err = xpcall(loaded, function(err)
 	}
 end)
 
-local function handle_uncaught_error(e: sys.Error)
-	print(e.err)
-	print("stacktrace:")
-	for _, frame in e.traceback do
-		local name, line_defined = debug.info(frame.func, "nl")
-		print(`    {frame.source}:{frame.line} function {name}`)
+local function handle_uncaught_error(e: sys.Error): never
+	if type(e.err) ~= "string" then
+		print(tostring(e.err))
+		return ops.exit(1)
 	end
+
+	local where_source, where_line = string.match(e.err, "(.-):(%-?%d+): ")
+	if not where_source then
+		print(e.err)
+		return ops.exit(1)
+	end
+
+	local where_line = tonumber(where_line) or -1
+	local start_at = 1
+	for i, frame in e.traceback do
+		if frame.source == where_source and frame.line == where_line then
+			start_at = i
+			break
+		end
+	end
+
+	local out: { string } = { `unhandled error: {tostring(e.err)}\nstacktrace:` }
+
+	for i = start_at, #e.traceback do
+		local frame = e.traceback[i]
+		local line = if frame.line == -1 then "" else `:{frame.line}`
+		local name, line_defined, source_defined = debug.info(frame.func, "nls")
+		local name = if name == "" then if line_defined == 1 then "<main>" else "<anonymous>" else `'{name}'`
+		local defined = if line_defined == -1 or name == "<main>" then "" else ` ({source_defined}:{line_defined})`
+		table.insert(out, `    {frame.source}{line} in function {name}{defined}`)
+	end
+
+	print(table.concat(out, "\n"))
+	return ops.exit(1)
 end
 
 if not ok then
