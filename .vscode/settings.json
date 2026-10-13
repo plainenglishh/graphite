@@ -1,0 +1,9 @@
+{
+    "editor.formatOnSave": true,
+    "luau-lsp.fflags.enableNewSolver": true,
+    "luau-lsp.types.definitionFiles": {
+        "ops": "typedefs/ops.d.luau"
+    },
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.procMacro.enable": true
+}
