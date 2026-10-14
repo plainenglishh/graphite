@@ -1,10 +1,14 @@
 declare ops: {
     --- sys
-    std_module: (path: string) -> buffer?,
+    graphite_module: (path: string) -> buffer?,
     set_global: (key: string, value: any) -> (),
     sandbox: () -> (),
     registry: () -> {[any]: any},
-    
+    set_memory_category: (name: string) -> (),
+    set_memory_limit: (limit: number) -> (),
+    heap_dump: () -> any,
+    chunk_name: (level: number) -> string,
+
     -- env
     cwd: () -> string,
     args: () -> {string},

@@ -1,6 +1,5 @@
-use std::{env, ffi::OsString, fs, process};
-
 use mlua::{ffi, prelude::*};
+use std::{env, ffi::OsString, fs, process};
 
 include!(concat!(env!("OUT_DIR"), "/std.rs"));
 
@@ -10,7 +9,7 @@ fn find_std_bytecode(module_name: &str) -> Option<&'static [u8]> {
         .map(|&(_, bytes)| bytes)
 }
 
-fn op_std_module(luau: &Lua, path: LuaString) -> LuaResult<LuaValue> {
+fn op_graphite_module(luau: &Lua, path: LuaString) -> LuaResult<LuaValue> {
     let bytes = find_std_bytecode(&path.to_string_lossy());
     match bytes {
         Some(bytes) => Ok(LuaValue::Buffer(luau.create_buffer(bytes)?)),
@@ -34,6 +33,57 @@ fn op_registry(luau: &Lua, _: ()) -> LuaResult<LuaTable> {
             ffi::lua_pushvalue(state, ffi::LUA_REGISTRYINDEX);
         })
     }
+}
+
+fn op_set_memory_category(luau: &Lua, name: LuaString) -> LuaResult<()> {
+    luau.set_memory_category(&name.to_string_lossy())?;
+    Ok(())
+}
+
+fn op_set_memory_limit(luau: &Lua, name: LuaNumber) -> LuaResult<()> {
+    luau.set_memory_limit(usize::from_lua(LuaValue::Number(name), luau)?)?;
+    Ok(())
+}
+
+fn op_heap_dump(luau: &Lua, (): ()) -> LuaResult<LuaTable> {
+    let dump = luau.heap_dump()?;
+
+    let categories = luau.create_table()?;
+    for (category, bytes) in dump.size_by_category() {
+        categories.set(category, bytes as f64)?;
+    }
+
+    let types = luau.create_table()?;
+    for (typename, (count, size)) in dump.size_by_type(None) {
+        let elem = luau.create_table()?;
+        elem.set("count", count as f64)?;
+        elem.set("size", size as f64)?;
+        types.set(typename, elem)?;
+    }
+
+    let userdata = luau.create_table()?;
+    for (typename, (count, size)) in dump.size_by_userdata(None) {
+        let elem = luau.create_table()?;
+        elem.set("count", count as f64)?;
+        elem.set("size", size as f64)?;
+        userdata.set(typename, elem)?;
+    }
+
+    let dump_t = luau.create_table()?;
+    dump_t.set("total_size", dump.size())?;
+    dump_t.set("categories", categories)?;
+    dump_t.set("types", types)?;
+    dump_t.set("userdata", userdata)?;
+
+    Ok(dump_t)
+}
+
+fn op_chunk_name(luau: &Lua, level: LuaNumber) -> LuaResult<Option<LuaString>> {
+    let source = luau.inspect_stack(level as _, |dbg| {
+        dbg.source().source.map(|v| v.to_string()).unwrap()
+    });
+
+    Ok(source.map(|v| luau.create_string(v).unwrap()))
 }
 
 fn op_cwd(luau: &Lua, _: ()) -> LuaResult<LuaString> {
@@ -86,10 +136,20 @@ fn op_read_file(luau: &Lua, path: LuaString) -> LuaResult<LuaBuffer> {
 pub fn create(luau: &Lua) -> LuaResult<LuaTable> {
     let ops = luau.create_table()?;
 
-    ops.set("std_module", luau.create_function(op_std_module)?)?;
+    ops.set("graphite_module", luau.create_function(op_graphite_module)?)?;
     ops.set("set_global", luau.create_function(op_set_global)?)?;
     ops.set("sandbox", luau.create_function(op_sandbox)?)?;
     ops.set("registry", luau.create_function(op_registry)?)?;
+    ops.set(
+        "set_memory_category",
+        luau.create_function(op_set_memory_category)?,
+    )?;
+    ops.set(
+        "set_memory_limit",
+        luau.create_function(op_set_memory_limit)?,
+    )?;
+    ops.set("heap_dump", luau.create_function(op_heap_dump)?)?;
+    ops.set("chunk_name", luau.create_function(op_chunk_name)?)?;
 
     ops.set("cwd", luau.create_function(op_cwd)?)?;
     ops.set("args", luau.create_function(op_args)?)?;

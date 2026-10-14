@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 mlua = { version = "0.12.2", features = ["luau", "luau-jit", "vendored"] }
+signal-hook = "0.4.5"
 
 [build-dependencies]
 mlua = { version = "0.12.2", features = ["luau", "luau-jit", "vendored"] }

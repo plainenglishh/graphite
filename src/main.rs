@@ -1,23 +1,32 @@
-const RT: &[u8] = include_bytes!("../rt/init.luau");
-
 use mlua::prelude::*;
+use std::process::ExitCode;
+
 mod ops;
+
+const ENTRYPOINT: &[u8] = include_bytes!("../runtime/init.luau");
 
 fn run() -> LuaResult<()> {
     let luau = Lua::new();
+    luau.set_memory_category("graphite")?;
 
     luau.load_std_libs(LuaStdLib::ALL)?;
     luau.globals().set("require", LuaNil)?;
+    luau.gc_collect()?;
+    luau.set_jit_options(LuauJitOptions::new().inliner(true));
+    luau.enable_jit(true);
 
     let ops = ops::create(&luau)?;
-    luau.load(RT).set_name("=graphite").call(ops)
+    luau.load(ENTRYPOINT)
+        .set_name("@@graphite/init.luau")
+        .call(ops)
 }
 
-fn main() {
+fn main() -> ExitCode {
     match run() {
-        Ok(_) => {}
+        Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("{}", e.to_string())
+            eprintln!("{}", e.to_string());
+            ExitCode::FAILURE
         }
     }
 }
