@@ -17,7 +17,7 @@ fn run() -> LuaResult<()> {
 
     let ops = ops::create(&luau)?;
     luau.load(ENTRYPOINT)
-        .set_name("@@graphite/init.luau")
+        .set_name("@@runtime/init.luau")
         .call(ops)
 }
 

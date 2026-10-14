@@ -1,5 +1,7 @@
 local ops: typeof(ops) = ...
 
+local std
+
 do
 	local typedefs_stub = setmetatable({}, {
 		__index = function()
@@ -10,10 +12,37 @@ do
 	local graphite_require_cache = {}
 	local function require(path: string): any
 		local context: string = ops.chunk_name(2)
+		local is_runtime = string.sub(context, 1, 9) == "@@runtime"
+		local path = string.gsub(path, "\\", "/")
 
 		if string.sub(path, 1, 4) == "@std" then
-			local module_name = string.sub(path, 6)
-			local module_chunk_name = `@@graphite/std/{module_name}`
+			if is_runtime and string.sub(context, 11) == string.sub(path, 2) then
+				return typedefs_stub
+			end
+
+			local components = string.split(string.sub(path, 6), "/")
+			local current = std :: { [any]: any }
+
+			for _, component in components do
+				if component == "" then
+					continue
+				end
+				current = current[component]
+				if not current then
+					error(`no std module {path}`)
+				end
+			end
+
+			return current
+		end
+
+		if is_runtime then
+			if string.sub(path, 1, 8) ~= "@runtime" then
+				error(`require paths within runtime must be via @runtime`)
+			end
+
+			local module_name = string.sub(path, 10)
+			local module_chunk_name = `@@runtime/{module_name}`
 			if context == module_chunk_name then
 				return typedefs_stub
 			end
@@ -22,9 +51,9 @@ do
 				return graphite_require_cache[module_name]
 			end
 
-			local bytecode = ops.graphite_module(`std/{module_name}`)
+			local bytecode = ops.graphite_module(module_name)
 			if not bytecode then
-				error(`unknown std module '{module_name}'`)
+				error(`unknown graphite module '{module_name}'`)
 			end
 
 			local ret = ops.load(bytecode, module_chunk_name)(ops)
@@ -39,6 +68,7 @@ do
 	ops.sandbox()
 end
 
+std = require("@runtime/std/init")
 local sys = require("@std/sys")
 
 local function collect_err_info<T>(err: T): sys.Error
@@ -70,7 +100,7 @@ local function handle_uncaught_error(e: sys.Error): never
 
 	local where_source, where_line = string.match(e.err, "(.-):(%-?%d+): ")
 	if not where_source then
-		print(e.err)
+		print(e.err) -- if there's no where string, they probably intentionally disabled it with error(x, 0). skip stacktrace
 		return ops.exit(1)
 	end
 
@@ -111,5 +141,7 @@ if not ok then
 		handle_uncaught_error(err_handler_err)
 	end
 
-	ops.exit(1)
+	return ops.exit(1)
 end
+
+return ops.exit(0)
